@@ -67,6 +67,7 @@ public class FileProcessor {
             metadata.setUploaded_by(userId);
             
             fileRepository.save(metadata);
+            logger.info("File upload completed with details + " + metadata.toString());
             return "Success";
         } catch (AwsServiceException | SdkClientException e) {
             logger.error("AWS Exception occurred while uploading to S3 key: {}", key, e);

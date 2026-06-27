@@ -102,6 +102,12 @@ public class fileMetadata {
         this.uploaded_at = uploaded_at;
     }
 
+    @Override
+    public String toString() {
+        return "fileMetadata [circle_id=" + circle_id + ", uploaded_by=" + uploaded_by + ", s3_key=" + s3_key
+                + ", file_type=" + file_type + "]";
+    }
+
  
 
     
