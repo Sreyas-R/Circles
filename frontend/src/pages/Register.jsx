@@ -33,7 +33,7 @@ export default function Register() {
       } else {
         setError(getErrorMessage(result) || 'Registration failed');
       }
-    } catch (err) {
+    } catch {
       setError('Server connection failed');
     } finally {
       setLoading(false);

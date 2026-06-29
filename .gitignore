@@ -37,6 +37,7 @@ keys.properties
 .DS_Store
 logs/
 application.properties
+AGENTS.md
 
 ### Old Code ###
 frontend-old/

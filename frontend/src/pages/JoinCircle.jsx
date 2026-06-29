@@ -33,7 +33,7 @@ export default function JoinCircle() {
           setStatus(getErrorMessage(result) || 'Failed to join circle.');
           setTimeout(() => navigate('/dashboard'), 3000);
         }
-      } catch (err) {
+      } catch {
         setStatus('Server connection failed. Could not join circle.');
         setTimeout(() => navigate('/dashboard'), 3000);
       }

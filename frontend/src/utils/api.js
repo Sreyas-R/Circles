@@ -11,7 +11,11 @@ export const ERROR_MESSAGES = {
   'Invalid_File': 'Unsupported file type. Please upload JPEG, PNG, PDF, or DOC/DOCX.',
   'File_Too_Large': 'File is too large (max limit is 10MB).',
   'S3_UPLOAD_FAILED': 'Failed to upload file to storage.',
-  'INTERNAL_SERVER_ERROR': 'Internal server error occurred.'
+  'INTERNAL_SERVER_ERROR': 'Internal server error occurred.',
+  'INVALID_REQUEST': 'Invalid request.',
+  'UNAUTHORIZED': 'You do not have access to this file.',
+  'FILE_NOT_FOUND': 'This file could not be found.',
+  'DOWNLOAD_URL_FAILED': 'Could not prepare this file for download.'
 };
 
 export function getErrorMessage(result) {

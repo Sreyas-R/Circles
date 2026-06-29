@@ -1,6 +1,60 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { API_BASE_URL, getErrorMessage } from '../utils/api';
+
+const DOCUMENT_STATUS = {
+  IDLE: 'idle',
+  LOADING: 'loading',
+  SUCCESS: 'success',
+  ERROR: 'error'
+};
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(Number(bytes))) return 'Unknown size';
+
+  const size = Number(bytes);
+  if (size === 0) return '0 B';
+
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const unitIndex = Math.min(Math.floor(Math.log(size) / Math.log(1024)), units.length - 1);
+  const value = size / 1024 ** unitIndex;
+
+  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function formatUploadedDate(value) {
+  if (!value) return 'Unknown date';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown date';
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(date);
+}
+
+function getDocumentVisual(fileType = '', fileName = '') {
+  const normalizedType = fileType.toLowerCase();
+  const extension = fileName.split('.').pop()?.toLowerCase() || '';
+
+  if (normalizedType.includes('pdf') || extension === 'pdf') {
+    return { label: 'PDF', className: 'pdf', path: 'M7 3h7l5 5v13H7z M14 3v5h5 M9 14h6 M9 17h4' };
+  }
+
+  if (normalizedType.includes('word') || ['doc', 'docx'].includes(extension)) {
+    return { label: 'DOC', className: 'doc', path: 'M7 3h7l5 5v13H7z M14 3v5h5 M9 13l1.2 5 1.4-4 1.4 4 1.2-5' };
+  }
+
+  if (normalizedType.includes('image') || ['jpg', 'jpeg', 'png'].includes(extension)) {
+    return { label: 'IMG', className: 'image', path: 'M6 5h12v14H6z M9 10.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z M7.5 17l3.5-4 2.5 2.8 1.5-1.8 2.5 3' };
+  }
+
+  return { label: 'FILE', className: 'generic', path: 'M7 3h7l5 5v13H7z M14 3v5h5 M9 14h6 M9 17h6' };
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -19,10 +73,14 @@ export default function Dashboard() {
   const [copied, setCopied] = useState(false);
 
   // Circle View state
-  const [documentsState, setDocumentsState] = useState('Loading documents...');
+  const [documents, setDocuments] = useState([]);
+  const [documentsStatus, setDocumentsStatus] = useState(DOCUMENT_STATUS.IDLE);
+  const [documentsError, setDocumentsError] = useState('');
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState(null);
 
   // Active circle detail
   const activeCircle = circles.find(c => c.id.toString() === id);
+  const activeCircleId = activeCircle?.id;
 
   // File Upload and Toast States
   const fileInputRef = useRef(null);
@@ -43,9 +101,71 @@ export default function Dashboard() {
     }
   };
 
+  const loadCircles = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/GetCircles`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        navigate('/login');
+        return;
+      }
+
+      const result = await response.json();
+      if (response.ok && result.succMessage === 'SUCCESS') {
+        setCircles(result.data || []);
+      }
+    } catch (error) {
+      console.error("Failed to load circles", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [navigate]);
+
+  const loadDocuments = useCallback(async (circleId, signal) => {
+    if (!circleId) return;
+
+    setDocumentsStatus(DOCUMENT_STATUS.LOADING);
+    setDocumentsError('');
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/file/${circleId}/view/documents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        signal
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        navigate('/login');
+        return;
+      }
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(result) || 'Failed to load documents');
+      }
+
+      const nextDocuments = Array.isArray(result) ? result : result.data;
+      setDocuments(Array.isArray(nextDocuments) ? nextDocuments : []);
+      setDocumentsStatus(DOCUMENT_STATUS.SUCCESS);
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+
+      console.error('Failed to load documents', error);
+      setDocuments([]);
+      setDocumentsError(error.message || 'Server connection failed while loading documents');
+      setDocumentsStatus(DOCUMENT_STATUS.ERROR);
+    }
+  }, [navigate]);
+
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file || !activeCircleId) return;
 
     // Reset input value so same file can be selected again
     e.target.value = '';
@@ -78,7 +198,7 @@ export default function Dashboard() {
     formData.append('file', file);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/file/${activeCircle.id}/upload`, {
+      const response = await fetch(`${API_BASE_URL}/file/${activeCircleId}/upload`, {
         method: 'POST',
         body: formData,
         credentials: 'include'
@@ -88,55 +208,80 @@ export default function Dashboard() {
 
       if (response.ok && result.succMessage) {
         showToast('File uploaded successfully!', 'success');
+        await loadDocuments(activeCircleId);
       } else {
         const errorMsg = getErrorMessage(result) || result.errorMessage || 'Failed to upload file';
         showToast(errorMsg, 'error');
       }
-    } catch (err) {
+    } catch {
       showToast('Server connection failed during upload', 'error');
     } finally {
       setIsUploading(false);
     }
   };
 
-  useEffect(() => {
-    loadCircles();
-  }, []);
+  const handleDocumentDownload = async (document) => {
+    if (!activeCircleId || !document?.id || downloadingDocumentId) return;
 
-  const loadCircles = async () => {
+    setDownloadingDocumentId(document.id);
+
     try {
-      const response = await fetch(`${API_BASE_URL}/GetCircles`, {
-        method: 'GET',
+      const response = await fetch(`${API_BASE_URL}/file/${activeCircleId}/${document.id}/download`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include'
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         navigate('/login');
         return;
       }
 
       const result = await response.json();
-      if (response.ok && result.succMessage === 'SUCCESS') {
-        setCircles(result.data || []);
+
+      if (!response.ok || result.errorMessage) {
+        showToast(getErrorMessage(result) || 'Failed to download file', 'error');
+        return;
       }
-    } catch (error) {
-      console.error("Failed to load circles", error);
+
+      const downloadUrl = result.data?.downloadUrl;
+      if (!downloadUrl) {
+        showToast('Download link was not returned by the server', 'error');
+        return;
+      }
+
+      const link = window.document.createElement('a');
+      link.href = downloadUrl;
+      link.download = result.data?.fileName || document.fileName || '';
+      link.rel = 'noopener noreferrer';
+      window.document.body.appendChild(link);
+      link.click();
+      link.remove();
+      showToast('Download started', 'success');
+    } catch {
+      showToast('Server connection failed while preparing download', 'error');
     } finally {
-      setLoading(false);
+      setDownloadingDocumentId(null);
     }
   };
 
   useEffect(() => {
-    // Mock fetching documents when a circle is opened
-    if (activeCircle) {
-      setDocumentsState('Loading documents...');
-      const timer = setTimeout(() => {
-        setDocumentsState('No documents found.');
-      }, 500);
-      return () => clearTimeout(timer);
+    loadCircles();
+  }, [loadCircles]);
+
+  useEffect(() => {
+    if (!activeCircleId) {
+      setDocuments([]);
+      setDocumentsStatus(DOCUMENT_STATUS.IDLE);
+      setDocumentsError('');
+      return;
     }
-  }, [activeCircle]);
+
+    const controller = new AbortController();
+    loadDocuments(activeCircleId, controller.signal);
+
+    return () => controller.abort();
+  }, [activeCircleId, loadDocuments]);
 
   const handleLogout = async () => {
     try {
@@ -174,7 +319,7 @@ export default function Dashboard() {
       } else {
         setCreateError(getErrorMessage(result) || 'Failed to create circle');
       }
-    } catch (err) {
+    } catch {
       setCreateError('Server connection failed');
     }
   };
@@ -200,7 +345,7 @@ export default function Dashboard() {
         setInviteError(getErrorMessage(result) || 'Failed to generate invite link');
         setInviteLink('');
       }
-    } catch (err) {
+    } catch {
       setInviteError('Server connection failed');
       setInviteLink('');
     }
@@ -305,9 +450,100 @@ export default function Dashboard() {
             </div>
             
             <div className="documents-container">
-              <div className="empty-state">
-                <p>{documentsState}</p>
+              <div className="documents-title-row">
+                <div>
+                  <h3>Documents</h3>
+                  <p>{documents.length} {documents.length === 1 ? 'file' : 'files'} in this circle</p>
+                </div>
+                <button className="refresh-documents-btn" onClick={() => loadDocuments(activeCircle.id)} disabled={documentsStatus === DOCUMENT_STATUS.LOADING}>
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <polyline points="1 20 1 14 7 14"></polyline>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
+                    <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
+                  </svg>
+                </button>
               </div>
+
+              {documentsStatus === DOCUMENT_STATUS.LOADING && (
+                <div className="documents-grid">
+                  {[1, 2, 3].map(item => (
+                    <div key={item} className="document-card document-card-skeleton">
+                      <div className="document-icon skeleton-block"></div>
+                      <div className="document-skeleton-lines">
+                        <span className="skeleton-line wide"></span>
+                        <span className="skeleton-line narrow"></span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {documentsStatus === DOCUMENT_STATUS.ERROR && (
+                <div className="empty-state error-state">
+                  <p>{documentsError}</p>
+                  <button onClick={() => loadDocuments(activeCircle.id)}>Try again</button>
+                </div>
+              )}
+
+              {documentsStatus === DOCUMENT_STATUS.SUCCESS && documents.length === 0 && (
+                <div className="empty-state">
+                  <p>No documents found.</p>
+                </div>
+              )}
+
+              {documentsStatus === DOCUMENT_STATUS.SUCCESS && documents.length > 0 && (
+                <div className="documents-grid">
+                  {documents.map(document => {
+                    const visual = getDocumentVisual(document.fileType, document.fileName);
+
+                    return (
+                      <article
+                        key={document.id || `${document.fileName}-${document.uploadedAt}`}
+                        className={`document-card ${downloadingDocumentId === document.id ? 'document-card-downloading' : ''}`}
+                        onClick={() => handleDocumentDownload(document)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            handleDocumentDownload(document);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Download ${document.fileName || 'document'}`}
+                      >
+                        <div className={`document-icon document-icon-${visual.className}`}>
+                          <svg viewBox="0 0 24 24" width="34" height="34" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d={visual.path}></path>
+                          </svg>
+                          <span>{visual.label}</span>
+                        </div>
+                        {downloadingDocumentId === document.id && (
+                          <div className="document-download-badge">Preparing...</div>
+                        )}
+                        <div className="document-summary">
+                          <h4 title={document.fileName}>{document.fileName || 'Untitled document'}</h4>
+                          <p>{document.fileType || 'Unknown type'}</p>
+                        </div>
+                        <dl className="document-details">
+                          <div>
+                            <dt>Size</dt>
+                            <dd>{formatFileSize(document.fileSize)}</dd>
+                          </div>
+                          <div>
+                            <dt>Uploaded</dt>
+                            <dd>{formatUploadedDate(document.uploadedAt)}</dd>
+                          </div>
+                          <div>
+                            <dt>By</dt>
+                            <dd>{document.uploadedBy || 'Unknown'}</dd>
+                          </div>
+                        </dl>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </section>
         )}

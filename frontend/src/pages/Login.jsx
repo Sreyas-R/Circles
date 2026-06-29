@@ -29,7 +29,7 @@ export default function Login() {
       } else {
         setError(getErrorMessage(result) || 'Invalid username or password');
       }
-    } catch (err) {
+    } catch {
       setError('Server connection failed');
     } finally {
       setLoading(false);
