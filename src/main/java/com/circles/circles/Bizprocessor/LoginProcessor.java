@@ -122,7 +122,7 @@ public class LoginProcessor {
         Long counter = redisTemplate.opsForValue().increment(key);
         if(counter == 1){
             //First occurence , set ttl
-            Duration timeOut = Duration.ofSeconds(Long.valueOf(duration) * 60);
+            Duration timeOut = Duration.ofSeconds(Long.parseLong(duration) * 60);
             redisTemplate.expire(key, timeOut);
             return true;
         }

@@ -24,6 +24,7 @@ import com.circles.circles.Model.ResponseObj;
 import com.circles.circles.DTO.fileDTO;
 
 
+
 @RestController
 @RequestMapping("/file")
 public class FileController {
@@ -86,14 +87,19 @@ public class FileController {
         return res;
     }
 
-
-    @PostMapping("/{circleId}/view/documents")
-    public ResponseEntity<ResponseObj> getDocuments(@PathVariable String circleId ) {
+    
+    @PostMapping(value = {"/{circleId}/view/documents", "/{circleId}/view/documents/{page}/{size}"})
+    public ResponseEntity<ResponseObj> getDocuments(
+            @PathVariable String circleId,
+            @PathVariable(required = false) Integer page,
+            @PathVariable(required = false) Integer size) {
         ResponseObj response = new ResponseObj();
         
         try {
-            logger.info("Fetching documents for circleId={}", circleId);
-            List<fileDTO> documents = fileProcessor.getAllDocs(circleId);
+            int pageVal = (page != null) ? page : 0;
+            int sizeVal = (size != null) ? size : 20;
+            logger.info("Fetching documents for circleId={}, page={}, size={}", circleId, pageVal, sizeVal);
+            List<fileDTO> documents = fileProcessor.getAllDocs(circleId , pageVal , sizeVal);
             response.setSuccMessage("SUCCESS");
             response.setData(documents);
             logger.info("Fetched {} documents for circleId={}", documents.size(), circleId);

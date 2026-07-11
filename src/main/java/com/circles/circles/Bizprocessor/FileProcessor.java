@@ -10,6 +10,9 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -28,6 +31,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -44,6 +48,9 @@ public class FileProcessor {
 
     @Value("${aws.s3.bucket.name}")
     private String bucket;
+
+    @Value("${aws.s3.thumbnail.bucket.name}")
+    private String thumbnailBucket;
 
     private static final Duration DOWNLOAD_URL_TTL = Duration.ofMinutes(15);
 
@@ -108,18 +115,108 @@ public class FileProcessor {
         return fileName.replaceAll("[\\\\/]+", "_");
     }
 
-    public List<fileDTO> getAllDocs(String circleId) {
+    //1.Make this paginated , and fetch thumbnails for this aswell and store in fileDTO object
+    public List<fileDTO> getAllDocs(String circleId , int page , int size) {
         Long parsedCircleId = Long.valueOf(circleId);
         Long userId = getAuthenticatedUserId();
 
         if (!isCircleMember(userId, parsedCircleId)) {
             throw new SecurityException("User is not a member of this circle");
         }
+        Pageable pageable = PageRequest.of(page, size , Sort.by(Sort.Direction.DESC, "uploaded_at"));
+        List<fileDTO> files = fileRepository.getAllDocs(parsedCircleId , pageable);
 
-        return fileRepository.getAllDocs(parsedCircleId);
+        for(fileDTO file : files){
+            if(file.getFileType() != null && file.getFileType().contains("image/")){
+                String awsKey = file.getFileS3Key();
+                String thumbnailKey = "resized-" + awsKey;
+                try {
+                    if (s3KeyExists(thumbnailBucket, thumbnailKey)) {
+                        PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(r -> r
+                        .signatureDuration(DOWNLOAD_URL_TTL)
+                        .getObjectRequest(g -> g
+                                .bucket(thumbnailBucket)
+                                .key(thumbnailKey)));
+
+                        logger.info("Thumbnail presigning done for thumbnailKey: {} " , thumbnailKey);
+                        file.setFileURL(presignedRequest.url().toString());
+                    } else {
+                        logger.warn("Thumbnail does not exist in bucket {} for key: {}", thumbnailBucket, thumbnailKey);
+                    }
+                } catch(Exception e) {
+                    logger.error("Exception occurred while generating presigned key for thumbnailKey: {}", thumbnailKey, e);
+                }
+            }
+            file.setFileS3Key(null);    //Not sending this to frontend
+        }
+
+        return files;
     }
 
-    // public void getThumbnail(String circleId , String)
+    private boolean s3KeyExists(String bucketName, String key) {
+        try {
+            s3Client.headObject(HeadObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .build());
+            return true;
+        } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException e) {
+            logger.warn("NoSuchKeyException: Key {} not found in bucket {}", key, bucketName);
+            return false;
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
+            if (e.statusCode() == 404) {
+                logger.warn("S3 404: Key {} not found in bucket {}", key, bucketName);
+                return false;
+            }
+            logger.error("AWS S3 error checking key existence. bucket={}, key={}, status={}", bucketName, key, e.statusCode(), e);
+            return false;
+        } catch (Exception e) {
+            logger.error("Unexpected error checking key existence. bucket={}, key={}", bucketName, key, e);
+            return false;
+        }
+    }
+    //Wont need this function , we will generate presigned urls while doing getAllDocs to prevent multiple backend calls for essentially the same thing
+    // public List<FileDownloadResult> getThumbnail(Long circleId , int page , int size){
+    //     //1.Get the s3 keynames
+    //     Long userId = getAuthenticatedUserId();
+    //     List<FileDownloadResult> thumbnails = null;
+    //     if(!isCircleMember(userId, circleId)){
+    //         logger.warn("Unauthorized thumbnail attempt, userId={} , circleId={}" , userId,circleId);
+    //         thumbnails.add(FileDownloadResult.failure());
+    //         return thumbnails;
+    //     }
+    //     //2.Iterate through and generate the presigned urls
+    //     Pageable pageable = PageRequest.of(page, size , Sort.by("uploadedAt").descending());
+
+    //     List<fileMetadata> thumbnailMd = fileRepository.findByCircleIdAndFileType(circleId, pageable);
+    //     if(!thumbnailMd.isEmpty()){
+    //         for(fileMetadata fm : thumbnailMd){
+    //             String awsKey = fm.getS3_key();
+    //             //TODO : Add Redis caching of the presigned urls for 15 minute duration
+    //             try{
+    //                 PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(r -> r
+    //                 .signatureDuration(DOWNLOAD_URL_TTL)
+    //                 .getObjectRequest(g -> g
+    //                         .bucket(thumbnailBucket)
+    //                         .key(awsKey)));
+
+    //                 logger.info("Thumbnail presigning done for awsKey {} " , awsKey);
+    //                 FileDownloadResult i = new FileDownloadResult(DownloadStatus.SUCCESS, presignedRequest.url().toString(),null,  DOWNLOAD_URL_TTL.toSeconds());
+    //                 thumbnails.add(i);
+    //             }catch(Exception e){
+    //             logger.error("Exception occurred while creating presigned download URL. circleId={}", circleId , e);
+    //             thumbnails.add(FileDownloadResult.failure());
+    //             return thumbnails;
+    //             }
+
+    //         }
+        
+    //     }
+    //     return thumbnails;
+
+
+    //     //3.Success
+    // }
     public FileDownloadResult createDownloadUrl(String circleId, String fileId) {
         Long parsedCircleId = Long.valueOf(circleId);
         Long parsedFileId = Long.valueOf(fileId);

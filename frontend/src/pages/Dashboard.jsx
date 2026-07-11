@@ -77,6 +77,8 @@ export default function Dashboard() {
   const [documentsStatus, setDocumentsStatus] = useState(DOCUMENT_STATUS.IDLE);
   const [documentsError, setDocumentsError] = useState('');
   const [downloadingDocumentId, setDownloadingDocumentId] = useState(null);
+  const [failedThumbnails, setFailedThumbnails] = useState(new Set());
+  const [localPreviews, setLocalPreviews] = useState({});
 
   // Active circle detail
   const activeCircle = circles.find(c => c.id.toString() === id);
@@ -194,6 +196,15 @@ export default function Dashboard() {
     setIsUploading(true);
     showToast(`Uploading ${file.name}...`, 'success');
 
+    if (file.type.startsWith('image/')) {
+      const localUrl = URL.createObjectURL(file);
+      const fileKey = `${file.name}-${file.size}`;
+      setLocalPreviews(prev => ({
+        ...prev,
+        [fileKey]: localUrl
+      }));
+    }
+
     const formData = new FormData();
     formData.append('file', file);
 
@@ -274,10 +285,32 @@ export default function Dashboard() {
       setDocuments([]);
       setDocumentsStatus(DOCUMENT_STATUS.IDLE);
       setDocumentsError('');
+      setFailedThumbnails(new Set());
+      setLocalPreviews(prev => {
+        Object.values(prev).forEach(url => {
+          try {
+            URL.revokeObjectURL(url);
+          } catch (e) {
+            console.error("Failed to revoke object URL", e);
+          }
+        });
+        return {};
+      });
       return;
     }
 
     const controller = new AbortController();
+    setFailedThumbnails(new Set());
+    setLocalPreviews(prev => {
+      Object.values(prev).forEach(url => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          console.error("Failed to revoke object URL", e);
+        }
+      });
+      return {};
+    });
     loadDocuments(activeCircleId, controller.signal);
 
     return () => controller.abort();
@@ -496,6 +529,10 @@ export default function Dashboard() {
                 <div className="documents-grid">
                   {documents.map(document => {
                     const visual = getDocumentVisual(document.fileType, document.fileName);
+                    const fileKey = `${document.fileName}-${document.fileSize}`;
+                    const previewURL = (document.fileType?.startsWith('image/') && localPreviews[fileKey]) 
+                      ? localPreviews[fileKey] 
+                      : document.fileURL;
 
                     return (
                       <article
@@ -512,12 +549,30 @@ export default function Dashboard() {
                         tabIndex={0}
                         aria-label={`Download ${document.fileName || 'document'}`}
                       >
-                        <div className={`document-icon document-icon-${visual.className}`}>
-                          <svg viewBox="0 0 24 24" width="34" height="34" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                            <path d={visual.path}></path>
-                          </svg>
-                          <span>{visual.label}</span>
-                        </div>
+                        {previewURL && !failedThumbnails.has(document.id) ? (
+                          <div className="document-thumbnail-container">
+                            <img 
+                              src={previewURL} 
+                              alt={document.fileName} 
+                              className="document-thumbnail-img" 
+                              loading="lazy" 
+                              onError={() => {
+                                setFailedThumbnails(prev => {
+                                  const next = new Set(prev);
+                                  next.add(document.id);
+                                  return next;
+                                });
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className={`document-icon document-icon-${visual.className}`}>
+                            <svg viewBox="0 0 24 24" width="34" height="34" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                              <path d={visual.path}></path>
+                            </svg>
+                            <span>{visual.label}</span>
+                          </div>
+                        )}
                         {downloadingDocumentId === document.id && (
                           <div className="document-download-badge">Preparing...</div>
                         )}
