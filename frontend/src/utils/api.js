@@ -15,7 +15,8 @@ export const ERROR_MESSAGES = {
   'INVALID_REQUEST': 'Invalid request.',
   'UNAUTHORIZED': 'You do not have access to this file.',
   'FILE_NOT_FOUND': 'This file could not be found.',
-  'DOWNLOAD_URL_FAILED': 'Could not prepare this file for download.'
+  'DOWNLOAD_URL_FAILED': 'Could not prepare this file for download.',
+  'TOO_MANY_ATTEMPTS' : 'Too many attempts, Please try again later.'
 };
 
 export function getErrorMessage(result) {

@@ -60,7 +60,7 @@ public class FileProcessor {
      */
     public String uploadFile(String circleId, String fileName, InputStream fileStream, long contentLength,
             String fileType) {
-        Long parsedCircleId = Long.parseLong(circleId);
+        Long parsedCircleId = Long.valueOf(circleId);
         Long userId = getAuthenticatedUserId();
 
         if (!isCircleMember(userId, parsedCircleId)) {
@@ -109,7 +109,7 @@ public class FileProcessor {
     }
 
     public List<fileDTO> getAllDocs(String circleId) {
-        Long parsedCircleId = Long.parseLong(circleId);
+        Long parsedCircleId = Long.valueOf(circleId);
         Long userId = getAuthenticatedUserId();
 
         if (!isCircleMember(userId, parsedCircleId)) {
@@ -119,6 +119,7 @@ public class FileProcessor {
         return fileRepository.getAllDocs(parsedCircleId);
     }
 
+    // public void getThumbnail(String circleId , String)
     public FileDownloadResult createDownloadUrl(String circleId, String fileId) {
         Long parsedCircleId = Long.valueOf(circleId);
         Long parsedFileId = Long.valueOf(fileId);

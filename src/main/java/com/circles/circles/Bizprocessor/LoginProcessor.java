@@ -1,5 +1,10 @@
 package com.circles.circles.Bizprocessor;
 
+import java.time.Duration;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -20,17 +25,21 @@ import jakarta.transaction.Transactional;
 
 @Service
 public class LoginProcessor {
+    private static final Logger logger = LoggerFactory.getLogger(LoginProcessor.class);
+
     private final UserRepo userRepo;
     private final PasswordEncoder pwEncoder;
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository securityContextRepository;
+    private final StringRedisTemplate redisTemplate;
 
     public LoginProcessor(UserRepo userRepo, PasswordEncoder pwEncoder, AuthenticationManager authenticationManager,
-            SecurityContextRepository securityContextRepository) {
+            SecurityContextRepository securityContextRepository, StringRedisTemplate redisTemplate) {
         this.userRepo = userRepo;
         this.pwEncoder = pwEncoder;
         this.authenticationManager = authenticationManager;
         this.securityContextRepository = securityContextRepository;
+        this.redisTemplate = redisTemplate;
     }
 
     @Transactional
@@ -70,9 +79,15 @@ public class LoginProcessor {
 
     public ResponseObj loginUser(User user, HttpServletRequest request, HttpServletResponse response) {
         ResponseObj responseObj = new ResponseObj();
-
+        String ipAddr = request.getLocalAddr();
         String identifier = user.getEmail() != null ? user.getEmail() : user.getUsername();
 
+        if(!isLimited("login:" + ipAddr, 10L , "10")
+            || (!isLimited("login:" + identifier, 10L, "10"))
+        ){
+            responseObj.setErrorMessage("TOO_MANY_ATTEMPTS");
+            return responseObj;
+        }
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(identifier, user.getPassword()));
@@ -81,6 +96,14 @@ public class LoginProcessor {
             context.setAuthentication(authentication);
             SecurityContextHolder.setContext(context);
             securityContextRepository.saveContext(context, request, response);
+
+            // Record the user's login ID in Redis to verify connectivity and track login timestamp
+            try {
+                redisTemplate.opsForValue().set("last_login:" + identifier, String.valueOf(System.currentTimeMillis()));
+                logger.info("Successfully recorded login ID last_login:{} in Redis", identifier);
+            } catch (Exception redisEx) {
+                logger.error("Failed to record login ID in Redis for user {}: {}", identifier, redisEx.getMessage());
+            }
 
             responseObj.setSuccMessage("LOGIN_SUCCESS");
         } catch (AuthenticationException e) {
@@ -93,5 +116,17 @@ public class LoginProcessor {
     private static boolean passwordvalidation(String passwd) {
         String pattern = "(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=])(?=\\S+$).{8,}";
         return passwd.matches(pattern);
+    }
+
+    private boolean isLimited(String key , Long limit , String duration){
+        Long counter = redisTemplate.opsForValue().increment(key);
+        if(counter == 1){
+            //First occurence , set ttl
+            Duration timeOut = Duration.ofSeconds(Long.valueOf(duration) * 60);
+            redisTemplate.expire(key, timeOut);
+            return true;
+        }
+
+        return counter <= limit;
     }
 }

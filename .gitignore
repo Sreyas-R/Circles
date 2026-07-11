@@ -41,3 +41,5 @@ AGENTS.md
 
 ### Old Code ###
 frontend-old/
+lambda-s3/node_modules
+lambda-s3/function.zip

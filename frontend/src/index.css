@@ -1,6 +1,8 @@
 :root {
   /* Colors */
   --bg-color: #FBFBFD;
+  --surface-color: #ffffff;
+  --surface-elevated: #ffffff;
   --text-primary: #1D1D1F;
   --text-secondary: #86868B;
   --accent-blue: #0071E3;
@@ -9,10 +11,47 @@
   --glass-border: rgba(0, 0, 0, 0.08);
   --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
   --input-bg: rgba(0, 0, 0, 0.02);
+  --input-border: rgba(0, 0, 0, 0.08);
+  --button-muted-bg: rgba(0, 0, 0, 0.04);
+  --button-muted-hover: rgba(0, 0, 0, 0.08);
+  --document-card-bg: linear-gradient(180deg, #ffffff 0%, #fafafb 100%);
+  --details-bg: rgba(255, 255, 255, 0.94);
+  --details-shadow: 0 -10px 30px rgba(255, 255, 255, 0.75);
+  --modal-overlay-bg: rgba(0, 0, 0, 0.4);
+  --error-bg: #FFF2F2;
+  --error-text: #D70015;
+  --success-bg: #E8F5E9;
+  --success-text: #2E7D32;
 
   /* Dimensions & Spacing */
   --border-radius: 12px;
   --container-max-width: 420px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-color: #111317;
+  --surface-color: #181b20;
+  --surface-elevated: #20242b;
+  --text-primary: #f4f6f8;
+  --text-secondary: #a4acb8;
+  --accent-blue: #5aa9ff;
+  --accent-hover: #7bbaff;
+  --glass-bg: rgba(24, 27, 32, 0.76);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --card-shadow: 0 14px 38px rgba(0, 0, 0, 0.28);
+  --input-bg: rgba(255, 255, 255, 0.06);
+  --input-border: rgba(255, 255, 255, 0.12);
+  --button-muted-bg: rgba(255, 255, 255, 0.07);
+  --button-muted-hover: rgba(255, 255, 255, 0.12);
+  --document-card-bg: linear-gradient(180deg, #20242b 0%, #191d23 100%);
+  --details-bg: rgba(27, 31, 38, 0.96);
+  --details-shadow: 0 -10px 30px rgba(12, 14, 18, 0.75);
+  --modal-overlay-bg: rgba(0, 0, 0, 0.62);
+  --error-bg: rgba(255, 69, 58, 0.12);
+  --error-text: #ff8a82;
+  --success-bg: rgba(52, 199, 89, 0.12);
+  --success-text: #6ee08f;
 }
 
 * {
@@ -34,6 +73,33 @@ body {
   flex-direction: column;
 }
 
+.theme-toggle {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 10000;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  padding: 0;
+  margin: 0;
+  border-radius: 999px;
+  color: var(--text-primary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--card-shadow);
+  backdrop-filter: saturate(180%) blur(18px);
+  -webkit-backdrop-filter: saturate(180%) blur(18px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-toggle:hover {
+  color: var(--accent-blue);
+  background: var(--surface-elevated);
+}
+
 /* Auth Layout */
 .auth-page {
   flex: 1;
@@ -46,7 +112,7 @@ body {
 .auth-container {
   width: 100%;
   max-width: var(--container-max-width);
-  background: white;
+  background: var(--surface-color);
   padding: 3rem 2.5rem;
   border-radius: 20px;
   box-shadow: var(--card-shadow);
@@ -86,7 +152,7 @@ input {
   padding: 1rem 1.25rem;
   font-size: 1rem;
   background: var(--input-bg);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--input-border);
   border-radius: var(--border-radius);
   color: var(--text-primary);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -94,7 +160,7 @@ input {
 }
 
 input:focus {
-  background: white;
+  background: var(--surface-elevated);
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.1);
 }
@@ -139,8 +205,8 @@ button:active {
 
 /* Error Messages */
 .error-message {
-  background: #FFF2F2;
-  color: #D70015;
+  background: var(--error-bg);
+  color: var(--error-text);
   padding: 0.75rem 1rem;
   border-radius: 8px;
   font-size: 0.9rem;
@@ -240,7 +306,7 @@ button:active {
 
 /* Circle Card Tile */
 .circle-card {
-  background: white;
+  background: var(--surface-color);
   border-radius: var(--border-radius);
   padding: 1.5rem;
   box-shadow: var(--card-shadow);
@@ -325,7 +391,7 @@ button:active {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--modal-overlay-bg);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -342,7 +408,7 @@ button:active {
 }
 
 .modal-content {
-  background: white;
+  background: var(--surface-color);
   width: 100%;
   max-width: 440px;
   padding: 2.5rem;
@@ -387,7 +453,7 @@ button:active {
 
 /* Circle View Styling */
 .circle-view {
-  background: white;
+  background: var(--surface-color);
   border-radius: var(--border-radius);
   padding: 2rem;
   box-shadow: var(--card-shadow);
@@ -418,7 +484,7 @@ button:active {
 }
 
 .icon-btn {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--button-muted-bg);
   border: none;
   border-radius: 8px;
   width: auto;
@@ -435,7 +501,7 @@ button:active {
 }
 
 .icon-btn:hover {
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--button-muted-hover);
   color: var(--text-primary);
 }
 
@@ -487,7 +553,7 @@ button:active {
   margin: 0;
   border-radius: 8px;
   color: var(--text-secondary);
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--button-muted-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -495,7 +561,7 @@ button:active {
 
 .refresh-documents-btn:hover:not(:disabled) {
   color: var(--text-primary);
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--button-muted-hover);
 }
 
 .refresh-documents-btn:disabled {
@@ -513,7 +579,7 @@ button:active {
   position: relative;
   min-height: 214px;
   padding: 1.1rem;
-  background: linear-gradient(180deg, #ffffff 0%, #fafafb 100%);
+  background: var(--document-card-bg);
   border: 1px solid var(--glass-border);
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
@@ -545,7 +611,7 @@ button:active {
   justify-content: center;
   align-items: center;
   gap: 0.25rem;
-  margin-bottom: 1.25rem;
+  margin: 0 auto 1.25rem;
   color: var(--document-accent, #5f6368);
   background: color-mix(in srgb, var(--document-accent, #5f6368) 12%, white);
   border: 1px solid color-mix(in srgb, var(--document-accent, #5f6368) 22%, white);
@@ -637,9 +703,9 @@ button:active {
   right: 0;
   bottom: 0;
   padding: 0.85rem 1rem;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--details-bg);
   border-top: 1px solid var(--glass-border);
-  box-shadow: 0 -10px 30px rgba(255, 255, 255, 0.75);
+  box-shadow: var(--details-shadow);
   transform: translateY(calc(100% - 10px));
   opacity: 0;
   transition: transform 0.2s ease, opacity 0.2s ease;
@@ -727,7 +793,7 @@ button:active {
   color: var(--text-secondary);
   background: var(--input-bg);
   border-radius: var(--border-radius);
-  border: 1px dashed rgba(0, 0, 0, 0.1);
+  border: 1px dashed var(--glass-border);
 }
 
 /* Invite Modal specific styles */
@@ -771,7 +837,7 @@ button:active {
 }
 
 .copy-btn:hover {
-  background: black;
+  background: var(--accent-hover);
 }
 
 .copy-btn.copied {
@@ -780,8 +846,8 @@ button:active {
 
 /* Success Messages */
 .success-message {
-  background: #E8F5E9;
-  color: #2E7D32;
+  background: var(--success-bg);
+  color: var(--success-text);
   padding: 0.75rem 1rem;
   border-radius: 8px;
   font-size: 0.9rem;
@@ -807,7 +873,7 @@ button:active {
   pointer-events: auto;
   min-width: 320px;
   max-width: 420px;
-  background: white;
+  background: var(--surface-color);
   border-radius: 12px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
   border: 1px solid var(--glass-border);
